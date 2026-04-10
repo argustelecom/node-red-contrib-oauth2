@@ -2,6 +2,7 @@
   "oauth2": {
     "oauth2": "oauth2",
     "tips": {
+      "senderr": "Ignored in this fork: any failure uses node.error(text, msg) so Catch always receives the same message. This checkbox is kept only for compatibility with old flow JSON.",
       "debug": "Check the box to enable debug mode with extra logs.",
       "client_credentials_in_body": "Ensure that the client credentials are included in the token request body for authentication purposes.",
       "rejectUnauthorized": "The rejectUnauthorized parameter controls SSL/TLS certificate validation for the server, with true enforcing validation and false disabling it.",
@@ -30,7 +31,7 @@
       "client_credentials_in_body": "Embedded Credentials",
       "proxy-config": "Proxy Configuration",
       "use-proxy": "Use proxy",
-      "senderr": "Only send non-2xx responses to Catch node",
+      "senderr": "Legacy option (no effect)",
       "refresh_token": "Refresh Token",
       "force": "Force Token Refresh"
     },

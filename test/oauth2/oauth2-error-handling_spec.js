@@ -1,9 +1,20 @@
 const should = require('should'); // eslint-disable-line no-unused-vars
 const helper = require('node-red-node-test-helper');
 const nock = require('nock');
-const oauth2Node = require('node-red-contrib-oauth2/src/oauth2.js');
+const oauth2Node = require('@argustelecom/node-red-contrib-oauth2/src/oauth2.js');
 
 helper.init(require.resolve('node-red'));
+
+/**
+ * Wrap node.error to assert OAuth2 failures without a second output (all errors are catchable).
+ */
+function tapNodeError(node, handler) {
+   const orig = node.error;
+   node.error = function (logMsg, msg) {
+      handler(logMsg, msg);
+      return orig.call(node, logMsg, msg);
+   };
+}
 
 describe('OAuth2 Node Error Handling', function () {
    before(function (done) {
@@ -29,10 +40,7 @@ describe('OAuth2 Node Error Handling', function () {
    it('should handle errors', function (done) {
       this.timeout(10000); // Set timeout for individual test
       console.log('Testing error handling...');
-      const flow = [
-         { id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[], ['n3']] },
-         { id: 'n3', type: 'helper' }
-      ];
+      const flow = [{ id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[]] }];
       const credentials = {
          clientId: 'testClientId',
          clientSecret: 'testClientSecret'
@@ -40,23 +48,20 @@ describe('OAuth2 Node Error Handling', function () {
 
       helper.load(oauth2Node, flow, credentials, function () {
          const n1 = helper.getNode('n1');
-         const n3 = helper.getNode('n3');
 
-         console.log('Setting up nock for invalid-url.com...');
-         const scope = nock('https://invalid-url.com').post('/').replyWithError('mocked error');
-
-         n3.on('input', function (msg) {
-            console.log('Received input on error helper node');
+         tapNodeError(n1, function (logMsg, msg) {
             try {
+               logMsg.should.be.a.String();
                msg.should.have.property('oauth2Error');
                msg.oauth2Error.should.have.property('message', 'mocked error');
-               scope.done(); // Verify if the nock interceptor was called
                done();
             } catch (err) {
-               console.error('Failed error handling test', err);
                done(err);
             }
          });
+
+         console.log('Setting up nock for invalid-url.com...');
+         nock('https://invalid-url.com').post('/').replyWithError('mocked error');
 
          console.log('Sending input to node...');
          n1.receive({
@@ -76,10 +81,7 @@ describe('OAuth2 Node Error Handling', function () {
    it('should handle invalid client credentials', function (done) {
       this.timeout(10000); // Set timeout for individual test
       console.log('Testing invalid client credentials handling...');
-      const flow = [
-         { id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[], ['n3']] },
-         { id: 'n3', type: 'helper' }
-      ];
+      const flow = [{ id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[]] }];
       const credentials = {
          clientId: 'invalidClientId',
          clientSecret: 'invalidClientSecret'
@@ -87,21 +89,19 @@ describe('OAuth2 Node Error Handling', function () {
 
       helper.load(oauth2Node, flow, credentials, function () {
          const n1 = helper.getNode('n1');
-         const n3 = helper.getNode('n3');
 
          console.log('Setting up nock for example.com...');
          const scope = nock('https://example.com').post('/oauth2/token').reply(401, { error: 'invalid_client' });
 
-         n3.on('input', function (msg) {
-            console.log('Received input on error helper node');
+         tapNodeError(n1, function (logMsg, msg) {
             try {
+               logMsg.should.be.a.String();
                msg.should.have.property('oauth2Error');
                msg.oauth2Error.should.have.property('status', 401);
                msg.oauth2Error.data.should.have.property('error', 'invalid_client');
-               scope.done(); // Verify if the nock interceptor was called
+               scope.done();
                done();
             } catch (err) {
-               console.error('Failed invalid client credentials handling test', err);
                done(err);
             }
          });

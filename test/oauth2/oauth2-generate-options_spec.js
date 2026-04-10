@@ -1,5 +1,5 @@
 const helper = require('node-red-node-test-helper');
-const OAuth2Node = require('node-red-contrib-oauth2/src/oauth2.js');
+const OAuth2Node = require('@argustelecom/node-red-contrib-oauth2/src/oauth2.js');
 
 helper.init(require.resolve('node-red'));
 

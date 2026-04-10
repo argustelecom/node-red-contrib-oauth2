@@ -7,16 +7,31 @@ node-red-contrib-oauth2
 =================
 The `node-red-contrib-oauth2` is a Node-RED node that provides an OAuth2 authentication flow. This node uses the OAuth2 protocol to obtain an access token, which can be used to make authenticated API requests.
 
+This repository is the **argustelecom** fork (`@argustelecom/node-red-contrib-oauth2`). Upstream: [caputomarcos/node-red-contrib-oauth2](https://github.com/caputomarcos/node-red-contrib-oauth2).
+
+## Argustelecom fork — fixes and changes
+
+| Version / change | Description |
+|------------------|-------------|
+| **6.2.2-argus.1** | Package scoped as `@argustelecom/node-red-contrib-oauth2`; `package.json` `homepage` / `repository` / `bugs` point to [argustelecom/node-red-contrib-oauth2](https://github.com/argustelecom/node-red-contrib-oauth2). |
+| *(earlier in this fork)* | All failures (network, HTTP 4xx/5xx, invalid token response, OAuth `error` in JSON) go through **Catch**: `node.error(message, msg)` with `msg.oauth2Error`; only successful token retrieval sends to the node output. Legacy checkbox “only non-2xx to Catch” no longer changes behaviour (documented in the editor). |
+| *(earlier in this fork)* | Fixed `grant_type` key **`client_credentials`** in `generateOptions` (was `client_credential`). `client_id` / `client_secret` in body only when “embedded credentials” is enabled; otherwise HTTP Basic only. |
+| *(earlier in this fork)* | Dev tooling: `eslint-plugin-n` aligned with `eslint-config-standard`; `sinon` declared for tests; `require` for logger uses a relative path in the node. |
+
+Further fixes will be listed in this section.
+
 ![image](https://github.com/user-attachments/assets/625ab345-2997-4e51-ad8c-10589685c09b)
 
 # Install
 
-You can install this node directly from the Node-RED editor by going to the Manage Palette menu and searching for `node-red-contrib-oauth2`. Alternatively, you can install it using npm:
+**This fork** — from GitHub (no npm.org publish required):
 
 ```bash
-$ cd ~/.node-red
-$ npm install node-red-contrib-oauth2
+cd ~/.node-red
+npm install git+https://github.com/argustelecom/node-red-contrib-oauth2.git#main
 ```
+
+Upstream: you can install the original node from the Node-RED palette (`Manage Palette`) or `npm install node-red-contrib-oauth2` in `~/.node-red`.
 
 # Usage
 

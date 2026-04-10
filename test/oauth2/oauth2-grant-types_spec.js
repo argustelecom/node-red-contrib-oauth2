@@ -1,7 +1,7 @@
 const should = require('should'); // eslint-disable-line no-unused-vars
 const helper = require('node-red-node-test-helper');
 const nock = require('nock');
-const OAuth2Node = require('node-red-contrib-oauth2/src/oauth2.js'); // Adjust the path as needed
+const OAuth2Node = require('@argustelecom/node-red-contrib-oauth2/src/oauth2.js');
 
 helper.init(require.resolve('node-red'));
 

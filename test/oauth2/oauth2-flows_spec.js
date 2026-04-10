@@ -1,6 +1,6 @@
 const helper = require('node-red-node-test-helper');
 const nock = require('nock');
-const oauth2Node = require('node-red-contrib-oauth2/src/oauth2.js');
+const oauth2Node = require('@argustelecom/node-red-contrib-oauth2/src/oauth2.js');
 
 describe('OAuth2 Node Flows', function () {
    it('should handle input and make POST request', async function () {

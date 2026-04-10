@@ -1,7 +1,7 @@
 const should = require('should'); // eslint-disable-line no-unused-vars
 const helper = require('node-red-node-test-helper');
 const nock = require('nock');
-const oauth2Node = require('node-red-contrib-oauth2/src/oauth2.js');
+const oauth2Node = require('@argustelecom/node-red-contrib-oauth2/src/oauth2.js');
 
 helper.init(require.resolve('node-red'));
 
@@ -171,10 +171,7 @@ describe('OAuth2 Node Edge Cases', function () {
    it('should handle network failure', function (done) {
       this.timeout(10000); // Set timeout for individual test
       console.log('Testing network failure handling...');
-      const flow = [
-         { id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[], ['n3']] },
-         { id: 'n3', type: 'helper' }
-      ];
+      const flow = [{ id: 'n1', type: 'oauth2', name: 'oauth2', wires: [[]] }];
       const credentials = {
          clientId: 'testClientId',
          clientSecret: 'testClientSecret'
@@ -182,23 +179,22 @@ describe('OAuth2 Node Edge Cases', function () {
 
       helper.load(oauth2Node, flow, credentials, function () {
          const n1 = helper.getNode('n1');
-         const n3 = helper.getNode('n3');
 
          console.log('Setting up nock for example.com...');
          const scope = nock('https://example.com').post('/oauth2/token').replyWithError('Network error');
 
-         n3.on('input', function (msg) {
-            console.log('Received input on error helper node');
+         const origError = n1.error;
+         n1.error = function (logMsg, msg) {
             try {
                msg.should.have.property('oauth2Error');
-               msg.oauth2Error.should.have.property('message', 'Network error');
-               scope.done(); // Verify if the nock interceptor was called
+               msg.oauth2Error.message.should.equal('Network error');
+               scope.done();
                done();
             } catch (err) {
-               console.error('Failed network failure handling test', err);
                done(err);
             }
-         });
+            return origError.call(n1, logMsg, msg);
+         };
 
          console.log('Sending input to node...');
          n1.receive({

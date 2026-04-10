@@ -5,7 +5,7 @@ module.exports = function (RED) {
    const http = require('http');
    const https = require('https');
    const { URLSearchParams } = require('url');
-   const Logger = require('node-red-contrib-oauth2/src/libs/logger');
+   const Logger = require('./libs/logger');
 
    /**
     * Class representing an OAuth2 Node.
@@ -38,7 +38,6 @@ module.exports = function (RED) {
          this.rejectUnauthorized = config.rejectUnauthorized || false;
          this.client_credentials_in_body = config.client_credentials_in_body || false;
          this.headers = config.headers || {};
-         this.sendErrorsToCatch = config.senderr || false;
          this.proxy = config.proxy || false;
          this.force = config.force || false;
          this.logger.debug('Constructor: Finished setting up node properties');
@@ -92,7 +91,7 @@ module.exports = function (RED) {
             this.handleResponse(response, msg, send); // Handle the response
          } catch (error) {
             this.logger.error('onInput: Error making POST request', error);
-            this.handleError(error, msg, send); // Handle any errors
+            this.handleError(error, msg); // Handle any errors (Catchable via node.error)
          }
 
          done(); // Indicate that processing is complete
@@ -137,10 +136,9 @@ module.exports = function (RED) {
                form.password = creds.password || this.password;
             },
             // Client credentials flow function
-            client_credential: () => {
+            client_credentials: () => {
                this.logger.debug('generateOptions: Client credentials flow detected');
-               form.client_id = creds.client_id || this.client_id;
-               form.client_secret = creds.client_secret || this.client_secret;
+               // client_id / client_secret: only in form if client_credentials_in_body (see below); else HTTP Basic only
             },
             // Refresh token flow function
             refresh_token: () => {
@@ -333,19 +331,54 @@ module.exports = function (RED) {
       handleResponse(response, msg, send) {
          this.logger.debug('handleResponse: Handling response', response);
 
-         if (!response || !response.data) {
+         if (!response || response.data === undefined || response.data === null) {
             this.logger.warn('handleResponse: Invalid response data', response);
-            this.handleError({ message: 'Invalid response data' }, msg, send);
+            this.handleError({ message: 'Invalid response data', response: response ? { status: response.status, data: response.data, headers: response.headers } : undefined }, msg);
             return;
          }
 
-         msg.oauth2Response = { ...(response.data || {}), access_token_url: this.access_token_url || '', authorization_endpoint: this.authorization_endpoint || '' };
-         msg.headers = response.headers || {}; // Include headers in the message
+         const data = response.data;
+         const token =
+            typeof data === 'object' && data !== null && Object.prototype.hasOwnProperty.call(data, 'access_token')
+               ? data.access_token
+               : undefined;
+
+         if (typeof data === 'object' && data !== null && data.error && !token) {
+            const desc = data.error_description || data.error;
+            const err = new Error(`OAuth2 error: ${desc}`);
+            err.response = {
+               status: response.status,
+               statusText: response.statusText || 'OAuth2 error',
+               data,
+               headers: response.headers || {}
+            };
+            this.handleError(err, msg);
+            return;
+         }
+
+         if (token === undefined || token === null || token === '') {
+            this.handleError(
+               {
+                  message: 'OAuth2: response missing access_token',
+                  response: { status: response.status, statusText: response.statusText, data, headers: response.headers }
+               },
+               msg
+            );
+            return;
+         }
+
+         msg.oauth2Response = {
+            ...data,
+            access_token_url: this.access_token_url || '',
+            authorization_endpoint: this.authorization_endpoint || ''
+         };
+         msg.headers = response.headers || {};
          this.setStatus('green', `HTTP ${response.status}, ok`);
          this.logger.debug('handleResponse: Response data set in message', msg);
 
-         const expireTime = Math.floor(Date.now() / 1000) + parseInt(response.data.expires_in || 3600);
-         this.credentials.access_token = response.data.access_token;
+         const expiresIn = parseInt(data.expires_in ?? 3600, 10);
+         const expireTime = Math.floor(Date.now() / 1000) + (Number.isFinite(expiresIn) ? expiresIn : 3600);
+         this.credentials.access_token = token;
          this.credentials.expire_time = expireTime;
          this.credentials = { ...this.credentials, oauth2Response: msg.oauth2Response, headers: msg.headers };
          RED.nodes.addCredentials(this.id, this.credentials);
@@ -354,28 +387,43 @@ module.exports = function (RED) {
       }
 
       /**
-       * Handles errors from the POST request.
-       * @param {Object} error - The error object.
-       * @param {Object} msg - Input message object.
-       * @param {Function} send - Function to send messages.
+       * Reports a catchable error: `node.error(text, msg)` so Catch nodes receive the same `msg` (with `oauth2Error`).
+       * @param {Error|Object} error - Axios error or `{ message, response? }`
+       * @param {Object} msg - input message
        */
-      handleError(error, msg, send) {
+      handleError(error, msg) {
          this.logger.error('handleError: Handling error', error);
 
-         const status = error.response ? error.response.status : error.code;
-         const message = error.response ? error.response.statusText : error.message;
-         const data = error.response && error.response.data ? error.response.data : {};
-         const headers = error.response ? error.response.headers : {};
+         const res = error.response;
+         let status;
+         let message;
+         let data = {};
+         let headers = {};
+
+         if (res) {
+            status = res.status;
+            message = res.statusText || error.message || 'OAuth2 request failed';
+            data = res.data !== undefined ? res.data : {};
+            headers = res.headers || {};
+         } else if (error.code) {
+            status = error.code;
+            message = error.message || String(error.code);
+            data = { code: error.code };
+         } else {
+            status = 'ERROR';
+            message = error.message || String(error);
+         }
+
          msg.oauth2Error = { status, message, data, headers };
-         this.setStatus('red', `HTTP ${status}, ${message}`);
+         const statusText = `HTTP ${status}, ${message}`;
+         this.setStatus('red', statusText);
          this.logger.debug('handleError: Error data set in message', msg);
 
-         if (this.sendErrorsToCatch) {
-            send([null, msg]);
-         } else {
-            this.error(msg);
-            send([null, msg]);
+         let logSummary = message;
+         if (typeof data === 'object' && data !== null && (data.error || data.error_description)) {
+            logSummary = `${message} (${data.error || ''}${data.error_description ? ': ' + data.error_description : ''})`;
          }
+         this.error(`OAuth2: ${logSummary}`, msg);
       }
 
       /**

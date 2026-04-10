@@ -1,6 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const Logger = require('node-red-contrib-oauth2/src/libs/logger'); // Adjust the path as necessary
+const Logger = require('@argustelecom/node-red-contrib-oauth2/src/libs/logger');
 
 const loggerStatusActive = { fill: 'yellow', shape: 'ring', text: 'Logging' };
 
